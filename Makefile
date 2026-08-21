@@ -154,23 +154,23 @@ all   :   $(OUTPUT).nro
 # Si icon.jpg no existe en la raíz del proyecto, el .nro se genera sin
 # icono personalizado en lugar de fallar la compilación.
 ifeq ($(wildcard $(APP_ICON)),)
-	NO_ICON := 1
+NO_ICON := 1
 endif
 
 ifeq ($(strip $(NO_ICON)),)
-	NROFLAGS += --icon=$(APP_ICON)
+NROFLAGS += --icon=$(APP_ICON)
 endif
 
 ifeq ($(strip $(NO_NACP)),)
-	NROFLAGS += --nacp=$(CURDIR)/$(TARGET).nacp
+NROFLAGS += --nacp=$(CURDIR)/$(TARGET).nacp
 endif
 
 ifneq ($(APP_TITLEID),)
-	NACPFLAGS += --titleid=$(APP_TITLEID)
+NACPFLAGS += --titleid=$(APP_TITLEID)
 endif
 
 ifneq ($(ROMID),)
-	NROFLAGS += --romfsdir=$(CURDIR)/$(ROMID)
+NROFLAGS += --romfsdir=$(CURDIR)/$(ROMID)
 endif
 
 #---------------------------------------------------------------------------------

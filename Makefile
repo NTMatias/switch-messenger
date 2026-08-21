@@ -70,18 +70,23 @@ LDFLAGS  =  -specs=$(DEVKITPRO)/libnx/switch.specs -g $(ARCH) -Wl,-Map,$(notdir 
 
 #---------------------------------------------------------------------------------
 # Librerías necesarias. IMPORTANTE:
-#   - Solo se enlazan las librerías realmente usadas por el código:
-#     SDL2, SDL2_ttf, freetype (usada internamente por SDL2_ttf en el
-#     entorno de devkitPro), bz2/png/z (dependencias de freetype/SDL2 en
-#     los portlibs de devkitPro) y libnx.
-#   - NO se enlaza EGL, GLESv2 ni harfbuzz porque el proyecto no usa
-#     renderizado OpenGL/EGL manual ni shaping de texto avanzado, evitando
-#     los errores "undefined reference to eglDestroySurface" /
-#     "undefined reference to hb_font_destroy".
+#   - SDL2, SDL2_ttf y freetype son las que usa directamente el código
+#     del proyecto.
+#   - harfbuzz, EGL, glapi y drm_nouveau NO se llaman directamente desde
+#     nuestro código: las arrastran internamente SDL2_ttf/freetype (para
+#     shaping de texto con harfbuzz) y SDL2 (su renderizador acelerado en
+#     Nintendo Switch usa EGL/GLES por debajo, vía la pila Mesa del
+#     sistema). Sin enlazarlas explícitamente el linker falla con
+#     "undefined reference to hb_*" / "undefined reference to egl*".
+#   - bz2/png/z son dependencias de freetype/SDL2 en los portlibs de
+#     devkitPro.
 #   - El orden es: objetos primero, librerías después (regla estándar del
-#     linker), y las librerías propias del proyecto antes de libnx.
+#     linker), y dentro de las librerías, las que usan símbolos de otra
+#     van antes que esa otra (SDL2_ttf/freetype antes que harfbuzz; SDL2
+#     antes que EGL/glapi/drm_nouveau).
 #---------------------------------------------------------------------------------
-LIBS    := -lSDL2_ttf -lSDL2 -lfreetype -lbz2 -lpng -lz -lm -lnx
+LIBS    := -lSDL2_ttf -lSDL2 -lfreetype -lharfbuzz -lbz2 -lpng -lz \
+           -lEGL -lglapi -ldrm_nouveau -lm -lnx
 
 #---------------------------------------------------------------------------------
 # Rutas de librerías: portlibs de devkitPro + libnx

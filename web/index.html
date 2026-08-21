@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Switch Messenger — Web</title>
+<style>
+  :root {
+    --bg: #0e1614;
+    --header: #202c28;
+    --accent: #25d366;
+    --bubble-in: #ebebeb;
+    --bubble-out: #25d366;
+    --text-light: #f0f0f0;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--text-light);
+  }
+
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    background: var(--header);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  header h1 { font-size: 16px; margin: 0; }
+
+  #status {
+    font-size: 12px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background: #444;
+  }
+  #status.online { background: var(--accent); color: #063; }
+  #status.offline { background: #a33; }
+
+  #login {
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  #login input, #login button {
+    padding: 12px;
+    border-radius: 8px;
+    border: none;
+    font-size: 15px;
+  }
+
+  #login button {
+    background: var(--accent);
+    color: #063;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  #chat {
+    display: none;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .bubble {
+    max-width: 75%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    line-height: 1.35;
+    word-wrap: break-word;
+  }
+
+  .bubble .sender {
+    display: block;
+    font-size: 11px;
+    opacity: 0.6;
+    margin-bottom: 2px;
+  }
+
+  .incoming {
+    align-self: flex-start;
+    background: var(--bubble-in);
+    color: #111;
+    border-bottom-left-radius: 2px;
+  }
+
+  .outgoing {
+    align-self: flex-end;
+    background: var(--bubble-out);
+    color: #06341f;
+    border-bottom-right-radius: 2px;
+  }
+
+  #composer {
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    background: var(--header);
+  }
+
+  #composer input {
+    flex: 1;
+    padding: 10px 12px;
+    border-radius: 20px;
+    border: none;
+    font-size: 14px;
+  }
+
+  #composer button {
+    background: var(--accent);
+    border: none;
+    border-radius: 50%;
+    width: 42px;
+    height: 42px;
+    font-size: 18px;
+    cursor: pointer;
+  }
+
+  #composer button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Switch Messenger</h1>
+    <span id="status" class="offline">Desconectado</span>
+  </header>
+
+  <div id="login">
+    <input id="serverUrl" type="text" placeholder="URL del servidor (ws://host:puerto o wss://...)" value="ws://127.0.0.1:8765">
+    <input id="username" type="text" placeholder="Tu nombre de usuario" maxlength="24">
+    <button id="connectBtn">Conectar</button>
+  </div>
+
+  <div id="chat">
+    <div id="messages"></div>
+    <div id="composer">
+      <input id="messageInput" type="text" placeholder="Escribe un mensaje..." maxlength="500" disabled>
+      <button id="sendBtn" disabled>➤</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // -----------------------------------------------------------------
+  // Este cliente usa el MISMO protocolo JSON simple que el cliente de
+  // Nintendo Switch:
+  //   Cliente -> Servidor: {"type":"join","username":"..."}
+  //                        {"type":"message","sender":"...","text":"..."}
+  //   Servidor -> Cliente: {"type":"message","sender":"...","text":"..."}
+  //                        {"type":"presence","username":"...","online":bool}
+  // -----------------------------------------------------------------
+
+  const statusEl = document.getElementById("status");
+  const loginEl = document.getElementById("login");
+  const chatEl = document.getElementById("chat");
+  const messagesEl = document.getElementById("messages");
+  const serverUrlInput = document.getElementById("serverUrl");
+  const usernameInput = document.getElementById("username");
+  const connectBtn = document.getElementById("connectBtn");
+  const messageInput = document.getElementById("messageInput");
+  const sendBtn = document.getElementById("sendBtn");
+
+  let socket = null;
+  let username = "";
+
+  function setStatus(connected) {
+    statusEl.textContent = connected ? "Conectado" : "Desconectado";
+    statusEl.className = connected ? "online" : "offline";
+    messageInput.disabled = !connected;
+    sendBtn.disabled = !connected;
+  }
+
+  function appendBubble(sender, text, outgoing) {
+    const bubble = document.createElement("div");
+    bubble.className = "bubble " + (outgoing ? "outgoing" : "incoming");
+
+    const senderLabel = document.createElement("span");
+    senderLabel.className = "sender";
+    senderLabel.textContent = outgoing ? "Tú" : sender;
+
+    const body = document.createElement("div");
+    body.textContent = text;
+
+    bubble.appendChild(senderLabel);
+    bubble.appendChild(body);
+    messagesEl.appendChild(bubble);
+
+    // Auto-scroll al último mensaje.
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function connect() {
+    const url = serverUrl_orDefault();
+    username = (usernameInput.value || "").trim();
+
+    if (!username) {
+      alert("Introduce un nombre de usuario.");
+      return;
+    }
+
+    connectBtn.disabled = true;
+    connectBtn.textContent = "Conectando...";
+
+    try {
+      socket = new WebSocket(url);
+    } catch (err) {
+      alert("URL de servidor no válida.");
+      connectBtn.disabled = false;
+      connectBtn.textContent = "Conectar";
+      return;
+    }
+
+    socket.onopen = function () {
+      setStatus(true);
+      loginEl.style.display = "none";
+      chatEl.style.display = "flex";
+      socket.send(JSON.stringify({ type: "join", username: username }));
+      messageInput.focus();
+    };
+
+    socket.onmessage = function (event) {
+      let data;
+      try {
+        data = JSON.parse(event.data);
+      } catch (err) {
+        return; // ignora mensajes que no son JSON válido
+      }
+
+      if (data.type === "message") {
+        const outgoing = data.sender === username;
+        appendBubble(data.sender, data.text, outgoing);
+      } else if (data.type === "presence") {
+        // Se podría reflejar el estado online/offline de cada contacto
+        // en una lista de chats; en esta interfaz simple de una sola
+        // conversación grupal solo se registra en consola.
+        console.log(data.username + (data.online ? " conectado" : " desconectado"));
+      }
+    };
+
+    socket.onclose = function () {
+      setStatus(false);
+      connectBtn.disabled = false;
+      connectBtn.textContent = "Conectar";
+    };
+
+    socket.onerror = function () {
+      setStatus(false);
+    };
+  }
+
+  function serverUrl_orDefault() {
+    const raw = (serverUrlInput.value || "").trim();
+    return raw || "ws://127.0.0.1:8765";
+  }
+
+  function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
+
+    socket.send(JSON.stringify({ type: "message", sender: username, text: text }));
+    appendBubble(username, text, true);
+    messageInput.value = "";
+  }
+
+  connectBtn.addEventListener("click", connect);
+  sendBtn.addEventListener("click", sendMessage);
+  messageInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") sendMessage();
+  });
+
+  setStatus(false);
+})();
+</script>
+</body>
+</html>

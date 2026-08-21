@@ -27,11 +27,17 @@ jobs:
         # Se instalan solo los paquetes que el proyecto necesita, sin
         # sincronizar/actualizar todo el árbol de paquetes con -Syu, para
         # evitar romper la imagen de CI por una actualización inesperada.
+        # switch-mesa (EGL/glapi/drm_nouveau) y switch-harfbuzz se
+        # necesitan porque SDL2 y SDL2_ttf/freetype los arrastran
+        # internamente en las versiones actuales de estos portlibs,
+        # aunque el código del proyecto no los use directamente.
         run: |
           sudo dkp-pacman -S --noconfirm --needed \
             switch-sdl2 \
             switch-sdl2_ttf \
             switch-freetype \
+            switch-harfbuzz \
+            switch-mesa \
             switch-libpng \
             switch-zlib \
             switch-bzip2

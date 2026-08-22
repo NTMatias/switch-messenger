@@ -5,6 +5,7 @@
 #endif
 
 #include <algorithm>
+#include <fstream>
 
 namespace app {
 
@@ -84,8 +85,18 @@ bool App::init() {
     m_chats.push_back({"Carlos", false, "Último mensaje...", {}});
 
     m_net.setEventCallback([this](const net::IncomingEvent& ev) { onNetworkEvent(ev); });
-    m_net.connect(SERVER_HOST, SERVER_PORT);
-    m_net.sendJoin(m_username);
+
+    if (loadConfig()) {
+        // Ya hay una IP y un usuario guardados de una vez anterior: se
+        // conecta directo, sin volver a preguntar.
+        m_screen = Screen::ChatList;
+        connectAndJoin();
+    } else {
+        // Primera vez que se abre la app: pide la IP del servidor y
+        // luego el nombre de usuario con el teclado en pantalla.
+        m_screen = Screen::SetupHost;
+        m_keyboard.open("Escribe la IP del servidor y presiona PLUS");
+    }
 
     m_running = true;
     return true;
@@ -110,17 +121,37 @@ void App::pollInput() {
     padUpdate(&g_pad);
     uint64_t keysDown = padGetButtonsDown(&g_pad);
 
+    // En las pantallas de configuración inicial, el teclado siempre debe
+    // estar abierto: si se cerró (por ejemplo el usuario presionó B),
+    // se vuelve a abrir de inmediato, porque no se puede seguir sin
+    // completar la IP y el usuario.
+    if ((m_screen == Screen::SetupHost || m_screen == Screen::SetupUsername) && !m_keyboard.isOpen()) {
+        m_keyboard.open(m_screen == Screen::SetupHost
+                             ? "Escribe la IP del servidor y presiona PLUS"
+                             : "Escribe tu nombre de usuario y presiona PLUS");
+    }
+
     if (m_keyboard.isOpen()) {
         bool sent = m_keyboard.handleInput(keysDown);
         if (sent) {
             const std::string text = m_keyboard.currentText();
-            if (m_activeChatIndex >= 0) {
+            m_keyboard.close();
+
+            if (m_screen == Screen::SetupHost) {
+                m_serverHost = text;
+                m_screen = Screen::SetupUsername;
+                m_keyboard.open("Escribe tu nombre de usuario y presiona PLUS");
+            } else if (m_screen == Screen::SetupUsername) {
+                m_username = text;
+                saveConfig();
+                m_screen = Screen::ChatList;
+                connectAndJoin();
+            } else if (m_activeChatIndex >= 0) {
                 ui::Chat& chat = m_chats[m_activeChatIndex];
                 ui::ChatUI::addMessage(chat, {m_username, text, true, nowMs()});
                 m_scrollOffset = std::max(0, static_cast<int>(chat.messages.size()) - ui::ChatUI::kVisibleMessages);
                 m_net.sendMessage(m_username, text);
             }
-            m_keyboard.close();
         }
         return; // mientras el teclado está abierto, absorbe toda la entrada
     }
@@ -171,7 +202,10 @@ void App::update() {
 }
 
 void App::render() {
-    if (m_screen == Screen::ChatList) {
+    if (m_screen == Screen::SetupHost || m_screen == Screen::SetupUsername) {
+        SDL_SetRenderDrawColor(m_renderer, 12, 22, 20, 255);
+        SDL_RenderClear(m_renderer);
+    } else if (m_screen == Screen::ChatList) {
         m_chatUI.renderChatList(m_renderer, m_font, m_chats, m_selectedChatIndex);
     } else if (m_activeChatIndex >= 0) {
         m_chatUI.renderConversation(m_renderer, m_font, m_chats[m_activeChatIndex], m_scrollOffset);
@@ -201,6 +235,43 @@ ui::Chat& App::findOrCreateChat(const std::string& sender) {
     }
     m_chats.push_back({sender, true, "", {}});
     return m_chats.back();
+}
+
+bool App::loadConfig() {
+    std::ifstream in(CONFIG_PATH);
+    if (!in.is_open()) {
+        return false;
+    }
+
+    std::string host;
+    std::string username;
+    if (!std::getline(in, host) || !std::getline(in, username)) {
+        return false;
+    }
+    if (host.empty() || username.empty()) {
+        return false;
+    }
+
+    m_serverHost = host;
+    m_username = username;
+    return true;
+}
+
+void App::saveConfig() {
+    std::ofstream out(CONFIG_PATH);
+    if (!out.is_open()) {
+        // Si por algún motivo no se puede escribir en la SD (carpeta
+        // inexistente, tarjeta protegida contra escritura, etc.), la app
+        // sigue funcionando igual; simplemente volverá a preguntar la
+        // próxima vez que se abra.
+        return;
+    }
+    out << m_serverHost << "\n" << m_username << "\n";
+}
+
+void App::connectAndJoin() {
+    m_net.connect(m_serverHost, SERVER_PORT);
+    m_net.sendJoin(m_username);
 }
 
 void App::onNetworkEvent(const net::IncomingEvent& event) {

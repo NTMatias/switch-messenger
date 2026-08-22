@@ -27,6 +27,7 @@ switch-messenger/
 
   ```bash
   (dkp-)pacman -S switch-dev switch-sdl2 switch-sdl2_ttf switch-freetype \
+                   switch-harfbuzz switch-mesa \
                    switch-zlib switch-bzip2 switch-libpng
   ```
 
@@ -67,25 +68,33 @@ make clean
 
 ## Configuración del servidor
 
-La dirección del servidor WebSocket al que se conecta el cliente de
-Nintendo Switch está definida en `source/app/App.hpp`:
+Ya **no** hace falta editar código para esto. La primera vez que abres la
+app en la Switch, te pide con el teclado en pantalla:
 
-```cpp
-constexpr const char* SERVER_HOST = "127.0.0.1";
-constexpr int         SERVER_PORT = 8765;
-```
+1. La IP del servidor (ej. `100.59.222.179`)
+2. Tu nombre de usuario
 
-Edita esos dos valores con la IP/host y el puerto de tu servidor antes de
-compilar. **`SERVER_HOST` debe ser una dirección IPv4 literal** (por
-ejemplo `"192.168.1.50"`), no un nombre de dominio: libnx no incluye un
-resolver DNS (no hay `gethostbyname`/`getaddrinfo`), así que este cliente
-no puede resolver nombres como `miservidor.onrender.com` por sí mismo.
-Para desarrollo local, usa la IP local de la máquina donde corre
-`server/app.py`. Este cliente se conecta mediante `ws://` (socket TCP
-plano); si tu servidor está detrás de HTTPS/TLS (por ejemplo en Render,
-ver más abajo), necesitarás adaptar `WebSocketClient` para hacer el
-handshake TLS o exponer un endpoint `ws://` sin cifrar para pruebas en tu
-propia red local.
+Y los guarda en la tarjeta SD, en `/switch/switch-messenger/config.txt`,
+así que en los siguientes usos entra directo al chat sin volver a
+preguntar. Si algún día cambias de servidor, borra ese archivo de la SD
+(o edítalo a mano con cualquier editor de texto: la primera línea es la
+IP, la segunda el usuario) para que la app te lo vuelva a preguntar.
+
+El puerto queda fijo en el código (`SERVER_PORT` en `source/app/App.hpp`,
+por defecto `8765`) — debe coincidir con el puerto en el que corre
+`server/app.py`.
+
+**Nota:** `SERVER_HOST` acepta tanto una IP literal como, en teoría, un
+nombre de dominio (el cliente intenta resolverlo con `getaddrinfo`), pero
+como este cliente se conecta sin cifrado (`ws://`, no `wss://`), en la
+práctica casi todos los hosting gratuitos con dominio (Render, etc.)
+**no van a funcionar** con la Switch porque obligan a usar conexión
+cifrada — por eso el proyecto está pensado para usarse con la IP de un
+VPS propio (ver la sección de AWS/VPS más abajo si aplica en tu caso).
+
+El cliente web (`web/index.html`) recuerda la IP y el usuario que
+pusiste la última vez usando el almacenamiento local del navegador; si
+cambias de servidor, simplemente borra el campo y escribe uno nuevo.
 
 ## Servidor Python
 

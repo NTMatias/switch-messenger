@@ -14,21 +14,18 @@
 namespace app {
 
 // ---------------------------------------------------------------------
-// Configuración del servidor. Edita estos valores para apuntar al
-// servidor WebSocket (ver README.md, sección "Configuración del
-// servidor"). SERVER_HOST admite tanto una IP literal ("192.168.1.50")
-// como un nombre de dominio (por ejemplo "tu-app.onrender.com"): el
-// cliente resuelve el nombre con getaddrinfo si hace falta.
-//
-// SERVER_PORT_TLS se documenta para referencia: este cliente
-// minimalista se conecta con sockets TCP planos (ws://), por lo que un
-// despliegue en Render detrás de wss:// requiere revisar la sección de
-// despliegue del README antes de usarse en producción.
+// El puerto del servidor queda fijo (debe coincidir con el que usa
+// server/app.py). La IP/host y el nombre de usuario ya NO se editan
+// aquí: la primera vez que se abre la app, pregunta esos dos datos con
+// el teclado en pantalla y los guarda en la tarjeta SD
+// (CONFIG_PATH), así que en los siguientes usos entra directo al chat.
 // ---------------------------------------------------------------------
-constexpr const char* SERVER_HOST = "127.0.0.1";
 constexpr int         SERVER_PORT = 8765;
+constexpr const char* CONFIG_PATH = "/switch/switch-messenger/config.txt";
 
 enum class Screen {
+    SetupHost,
+    SetupUsername,
     ChatList,
     Conversation,
 };
@@ -57,7 +54,7 @@ private:
 
     bool m_running = false;
 
-    Screen m_screen = Screen::ChatList;
+    Screen m_screen = Screen::SetupHost;
 
     std::vector<ui::Chat> m_chats;
     int m_selectedChatIndex = 0;
@@ -69,7 +66,8 @@ private:
     ui::NotificationManager m_notifications;
     net::WebSocketClient   m_net;
 
-    std::string m_username = "switch_user";
+    std::string m_serverHost;
+    std::string m_username;
 
     void pollInput();
     void update();
@@ -77,6 +75,19 @@ private:
 
     void openChat(int index);
     void closeChat();
+
+    // Intenta leer m_serverHost/m_username desde CONFIG_PATH. Devuelve
+    // true si el archivo existía y tenía ambos datos.
+    bool loadConfig();
+
+    // Guarda m_serverHost/m_username en CONFIG_PATH para no volver a
+    // preguntarlos en el siguiente inicio.
+    void saveConfig();
+
+    // Conecta al servidor usando m_serverHost/SERVER_PORT y se une con
+    // m_username. Se llama tanto tras cargar la configuración guardada
+    // como justo después de completar la configuración inicial.
+    void connectAndJoin();
 
     // Callback invocado por WebSocketClient::poll() cuando llega un
     // evento de red. Se ejecuta de forma síncrona dentro de poll(), que

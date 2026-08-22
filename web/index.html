@@ -231,6 +231,16 @@
       return;
     }
 
+    // Recuerda estos datos para la próxima vez que abras la página, así
+    // no hay que volver a escribirlos.
+    try {
+      localStorage.setItem("switchMessengerServerUrl", url);
+      localStorage.setItem("switchMessengerUsername", username);
+    } catch (err) {
+      // Si el navegador bloquea localStorage (modo privado, etc.), no
+      // pasa nada: simplemente no se recordará para la próxima vez.
+    }
+
     connectBtn.disabled = true;
     connectBtn.textContent = "Conectando...";
 
@@ -302,6 +312,17 @@
   });
 
   setStatus(false);
+
+  // Si ya se conectó antes desde este navegador, precarga la IP y el
+  // usuario para que solo haga falta darle "Conectar".
+  try {
+    const savedUrl = localStorage.getItem("switchMessengerServerUrl");
+    const savedUsername = localStorage.getItem("switchMessengerUsername");
+    if (savedUrl) serverUrlInput.value = savedUrl;
+    if (savedUsername) usernameInput.value = savedUsername;
+  } catch (err) {
+    // localStorage no disponible: no pasa nada, se pide a mano como antes.
+  }
 })();
 </script>
 </body>

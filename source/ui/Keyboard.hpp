@@ -20,7 +20,11 @@ public:
 
     VirtualKeyboard();
 
-    void open();
+    // prompt es un texto opcional que se muestra encima de la caja de
+    // texto (por ejemplo "Escribe la IP del servidor"). Se usa en la
+    // pantalla de configuración inicial; para el chat normal se deja
+    // vacío.
+    void open(const std::string& prompt = "");
     void close();
     bool isOpen() const { return m_open; }
 
@@ -36,6 +40,7 @@ public:
 private:
     bool m_open = false;
     std::string m_text;
+    std::string m_prompt;
 
     int m_row = 0;
     int m_col = 0;
